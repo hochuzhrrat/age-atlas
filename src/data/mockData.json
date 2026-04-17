@@ -1,0 +1,67 @@
+{
+    "query": "Madonna 15",
+    "resolved": {
+        "person": "Madonna",
+        "year": 1973,
+        "age": 15
+    },
+    "main_person": {
+        "id": "madonna",
+        "name": "Madonna",
+        "category": "Music",
+        "age": 15,
+        "year": 1973,
+        "fact": "Living in Michigan before fame",
+        "image": "https://api.dicebear.com/7.x/initials/svg?seed=Madonna"
+    },
+    "contemporaries": [
+        {
+            "id": "michael-jackson",
+            "name": "Michael Jackson",
+            "category": "Music",
+            "age": 15,
+            "fact": "Performing with Jackson 5",
+            "image": "https://api.dicebear.com/7.x/initials/svg?seed=Michael_Jackson"
+        },
+        {
+            "id": "barbra-streisand",
+            "name": "Barbra Streisand",
+            "category": "Music",
+            "age": 31,
+            "fact": "Starring in The Way We Were",
+            "image": "https://api.dicebear.com/7.x/initials/svg?seed=Barbra_Streisand"
+        },
+        {
+            "id": "fidel-castro",
+            "name": "Fidel Castro",
+            "category": "Politics",
+            "age": 47,
+            "fact": "Leading Cuba and traveling globally",
+            "image": "https://api.dicebear.com/7.x/initials/svg?seed=Fidel_Castro"
+        },
+        {
+            "id": "pablo-picasso",
+            "name": "Pablo Picasso",
+            "category": "Art",
+            "age": 91,
+            "fact": "Still one of the world's most famous artists",
+            "image": "https://api.dicebear.com/7.x/initials/svg?seed=Pablo_Picasso"
+        },
+        {
+            "id": "steve-buscemi",
+            "name": "Steve Buscemi",
+            "category": "Film",
+            "age": 15,
+            "fact": "Still in school, years before acting",
+            "image": "https://api.dicebear.com/7.x/initials/svg?seed=Steve_Buscemi"
+        },
+        {
+            "id": "elon-musk",
+            "name": "Elon Musk",
+            "category": "Business",
+            "age": 2,
+            "fact": "Growing up in South Africa",
+            "image": "https://api.dicebear.com/7.x/initials/svg?seed=Elon_Musk"
+        }
+    ]
+}
