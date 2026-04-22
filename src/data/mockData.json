@@ -9,9 +9,27 @@
         "id": "madonna",
         "name": "Madonna",
         "category": "Music",
+        "birthYear": 1958,
         "age": 15,
         "year": 1973,
-        "fact": "Living in Michigan before fame",
+        "milestones": [
+            {
+                "year": 1958,
+                "text": "Born in Michigan"
+            },
+            {
+                "year": 1973,
+                "text": "Living in Michigan before fame"
+            },
+            {
+                "year": 1983,
+                "text": "Releasing early hits"
+            },
+            {
+                "year": 1990,
+                "text": "At the height of global pop fame"
+            }
+        ],
         "image": "https://api.dicebear.com/7.x/initials/svg?seed=Madonna"
     },
     "contemporaries": [
@@ -19,7 +37,27 @@
             "id": "michael-jackson",
             "name": "Michael Jackson",
             "category": "Music",
+            "birthYear": 1958,
+            "deathYear": 2009,
             "age": 15,
+            "milestones": [
+                {
+                    "year": 1958,
+                    "text": "Born in Gary, Indiana"
+                },
+                {
+                    "year": 1969,
+                    "text": "Becoming a breakout star with the Jackson 5"
+                },
+                {
+                    "year": 1973,
+                    "text": "Performing with Jackson 5"
+                },
+                {
+                    "year": 1982,
+                    "text": "Releasing Thriller"
+                }
+            ],
             "fact": "Performing with Jackson 5",
             "image": "https://api.dicebear.com/7.x/initials/svg?seed=Michael_Jackson"
         },
@@ -27,7 +65,26 @@
             "id": "barbra-streisand",
             "name": "Barbra Streisand",
             "category": "Music",
+            "birthYear": 1942,
             "age": 31,
+            "milestones": [
+                {
+                    "year": 1942,
+                    "text": "Born in Brooklyn"
+                },
+                {
+                    "year": 1964,
+                    "text": "Breaking through in Funny Girl"
+                },
+                {
+                    "year": 1973,
+                    "text": "Starring in The Way We Were"
+                },
+                {
+                    "year": 1983,
+                    "text": "Directing and starring in Yentl"
+                }
+            ],
             "fact": "Starring in The Way We Were",
             "image": "https://api.dicebear.com/7.x/initials/svg?seed=Barbra_Streisand"
         },
@@ -35,7 +92,27 @@
             "id": "fidel-castro",
             "name": "Fidel Castro",
             "category": "Politics",
+            "birthYear": 1926,
+            "deathYear": 2016,
             "age": 47,
+            "milestones": [
+                {
+                    "year": 1926,
+                    "text": "Born in eastern Cuba"
+                },
+                {
+                    "year": 1959,
+                    "text": "Taking power after the Cuban Revolution"
+                },
+                {
+                    "year": 1973,
+                    "text": "Leading Cuba and traveling globally"
+                },
+                {
+                    "year": 2008,
+                    "text": "Stepping down as president of Cuba"
+                }
+            ],
             "fact": "Leading Cuba and traveling globally",
             "image": "https://api.dicebear.com/7.x/initials/svg?seed=Fidel_Castro"
         },
@@ -43,7 +120,27 @@
             "id": "pablo-picasso",
             "name": "Pablo Picasso",
             "category": "Art",
+            "birthYear": 1881,
+            "deathYear": 1973,
             "age": 91,
+            "milestones": [
+                {
+                    "year": 1881,
+                    "text": "Born in Malaga"
+                },
+                {
+                    "year": 1907,
+                    "text": "Painting Les Demoiselles d'Avignon"
+                },
+                {
+                    "year": 1937,
+                    "text": "Creating Guernica"
+                },
+                {
+                    "year": 1973,
+                    "text": "Still one of the world's most famous artists"
+                }
+            ],
             "fact": "Still one of the world's most famous artists",
             "image": "https://api.dicebear.com/7.x/initials/svg?seed=Pablo_Picasso"
         },
@@ -51,7 +148,26 @@
             "id": "steve-buscemi",
             "name": "Steve Buscemi",
             "category": "Film",
+            "birthYear": 1957,
             "age": 15,
+            "milestones": [
+                {
+                    "year": 1957,
+                    "text": "Born in Brooklyn"
+                },
+                {
+                    "year": 1973,
+                    "text": "Still in school, years before acting"
+                },
+                {
+                    "year": 1992,
+                    "text": "Appearing in Reservoir Dogs"
+                },
+                {
+                    "year": 1996,
+                    "text": "Appearing in Fargo"
+                }
+            ],
             "fact": "Still in school, years before acting",
             "image": "https://api.dicebear.com/7.x/initials/svg?seed=Steve_Buscemi"
         },
@@ -59,7 +175,26 @@
             "id": "elon-musk",
             "name": "Elon Musk",
             "category": "Business",
+            "birthYear": 1971,
             "age": 2,
+            "milestones": [
+                {
+                    "year": 1971,
+                    "text": "Born in South Africa"
+                },
+                {
+                    "year": 1973,
+                    "text": "Growing up in South Africa"
+                },
+                {
+                    "year": 1995,
+                    "text": "Starting early internet companies"
+                },
+                {
+                    "year": 2002,
+                    "text": "Founding SpaceX"
+                }
+            ],
             "fact": "Growing up in South Africa",
             "image": "https://api.dicebear.com/7.x/initials/svg?seed=Elon_Musk"
         }
