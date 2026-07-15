@@ -131,43 +131,49 @@ export default function Home() {
   }
 
   function handleQueryChange(event: ChangeEvent<HTMLInputElement>) {
-    const nextQuery = event.target.value;
-    const yearMatch = nextQuery.match(/\b\d{4}\b/);
-
-    setQuery(nextQuery);
+    setQuery(event.target.value);
     setMessage("");
-
-    if (yearMatch) {
-      setTargetYear(Number(yearMatch[0]));
-    }
   }
 
   function onSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const yearMatch = query.match(/\b\d{4}\b/);
-    if (yearMatch) {
-      setTargetYear(Number(yearMatch[0]));
-    }
+    const ageMatch = query.match(/\b\d{1,3}\b/);
 
     const normalizedQuery = query
-      .replace(/\b\d+\b/g, "")
+      .replace(/\b\d+\b/g, " ")
+      .replace(/\b(at|in|aged?)\b/gi, " ")
       .trim()
       .toLowerCase();
 
-    if (!normalizedQuery) {
-      setMessage(yearMatch ? "" : "Person not found in local demo");
+    const match = normalizedQuery
+      ? findPersonByQuery(people, normalizedQuery)
+      : null;
+
+    if (normalizedQuery && !match) {
+      setMessage("Person not found in local demo");
       return;
     }
-
-    const match = findPersonByQuery(people, normalizedQuery);
 
     if (match) {
       selectPerson(match);
+    }
+
+    if (yearMatch) {
+      setTargetYear(Number(yearMatch[0]));
       return;
     }
 
-    setMessage("Person not found in local demo");
+    if (ageMatch) {
+      const subject = match ?? mainPerson;
+      setTargetYear(subject.birthYear + Number(ageMatch[0]));
+      return;
+    }
+
+    if (!normalizedQuery) {
+      setMessage("Person not found in local demo");
+    }
   }
 
   return (
@@ -178,7 +184,7 @@ export default function Home() {
             <Input
               value={query}
               onChange={handleQueryChange}
-              placeholder="Try Elon Musk"
+              placeholder="Try Elon Musk at 30"
               aria-label="Search by name"
             />
             <Button type="submit">Search</Button>
