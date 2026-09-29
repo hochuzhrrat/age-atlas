@@ -7,7 +7,7 @@ const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: "Age Atlas",
-  description: "A minimal Next.js app for Age Atlas.",
+  description: "Compare lives in the same moment: pick a person and a year or age, and see who else was alive then.",
 };
 
 export default function RootLayout({
