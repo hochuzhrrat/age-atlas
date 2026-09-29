@@ -40,7 +40,9 @@ The MVP includes:
 ## Input rules
 - person + year → use year
 - person + age → calculate year
-- number only → treat as year
+- 4-digit number only → treat as year for the current person
+- 1–3 digit number only → treat as age of the current person
+- year outside the person's lifespan → show a message, keep the current result
 - always show both year and age in result
 
 ## Output structure

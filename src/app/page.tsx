@@ -12,24 +12,14 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import data from "@/data/mockData.json";
-
-type Milestone = {
-  year: number;
-  text: string;
-};
-
-type Person = {
-  id: string;
-  name: string;
-  category: string;
-  birthYear: number;
-  deathYear?: number;
-  age?: number;
-  year?: number;
-  fact?: string;
-  milestones: Milestone[];
-  image: string;
-};
+import {
+  getAge,
+  getFactForYear,
+  isAliveIn,
+  type Person,
+} from "@/lib/people";
+import { resolveSearch } from "@/lib/query";
+import { cn } from "@/lib/utils";
 
 function PersonImage({
   person,
@@ -51,54 +41,26 @@ function PersonImage({
   );
 }
 
-function getFactForYear(milestones: Milestone[], targetYear: number) {
-  const sortedMilestones = [...milestones].sort((a, b) => a.year - b.year);
-  const firstMilestone = sortedMilestones[0];
-
-  if (!firstMilestone) {
-    return "";
-  }
-
-  return (
-    sortedMilestones.findLast((milestone) => milestone.year <= targetYear) ??
-    firstMilestone
-  ).text;
-}
-
-function findPersonByQuery(people: Person[], query: string) {
-  const normalizedQuery = query.toLowerCase();
-  const exactMatch = people.find((person) =>
-    person.name.toLowerCase().includes(normalizedQuery)
-  );
-
-  if (exactMatch) {
-    return exactMatch;
-  }
-
-  const queryWords = normalizedQuery
-    .split(/\s+/)
-    .filter((word) => word.length >= 3);
-
-  return people.find((person) => {
-    const normalizedName = person.name.toLowerCase();
-
-    return queryWords.some((word) => normalizedName.includes(word));
-  });
-}
-
 function clampPercentage(value: number) {
   return Math.min(100, Math.max(0, value));
 }
 
 const TIMELINE_START_YEAR = 1900;
+const INITIAL_PERSON_ID = "madonna";
+const INITIAL_YEAR = 1973;
+
+const people: Person[] = data.people;
+const initialPerson =
+  people.find((person) => person.id === INITIAL_PERSON_ID) ?? people[0];
 
 export default function Home() {
-  const people = [data.main_person, ...data.contemporaries];
-  const [mainPerson, setMainPerson] = useState<Person>(data.main_person);
-  const [targetYear, setTargetYear] = useState(data.resolved.year);
+  const [mainPerson, setMainPerson] = useState(initialPerson);
+  const [targetYear, setTargetYear] = useState(INITIAL_YEAR);
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
-  const contemporaries = people.filter((person) => person.id !== mainPerson.id);
+  const contemporaries = people.filter(
+    (person) => person.id !== mainPerson.id && isAliveIn(person, targetYear)
+  );
   const currentYear = new Date().getFullYear();
   const timelineSpan = currentYear - TIMELINE_START_YEAR;
   const selectedYearPosition = clampPercentage(
@@ -121,10 +83,6 @@ export default function Home() {
     (_, index) => TIMELINE_START_YEAR + index * 10
   );
 
-  function calculateAge(person: Person) {
-    return targetYear - person.birthYear;
-  }
-
   function selectPerson(person: Person) {
     setMainPerson(person);
     setMessage("");
@@ -138,42 +96,15 @@ export default function Home() {
   function onSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const yearMatch = query.match(/\b\d{4}\b/);
-    const ageMatch = query.match(/\b\d{1,3}\b/);
+    const result = resolveSearch(query, people, mainPerson, targetYear);
 
-    const normalizedQuery = query
-      .replace(/\b\d+\b/g, " ")
-      .replace(/\b(at|in|aged?)\b/gi, " ")
-      .trim()
-      .toLowerCase();
-
-    const match = normalizedQuery
-      ? findPersonByQuery(people, normalizedQuery)
-      : null;
-
-    if (normalizedQuery && !match) {
-      setMessage("Person not found in local demo");
+    if (!result.ok) {
+      setMessage(result.message);
       return;
     }
 
-    if (match) {
-      selectPerson(match);
-    }
-
-    if (yearMatch) {
-      setTargetYear(Number(yearMatch[0]));
-      return;
-    }
-
-    if (ageMatch) {
-      const subject = match ?? mainPerson;
-      setTargetYear(subject.birthYear + Number(ageMatch[0]));
-      return;
-    }
-
-    if (!normalizedQuery) {
-      setMessage("Person not found in local demo");
-    }
+    selectPerson(result.person);
+    setTargetYear(result.year);
   }
 
   return (
@@ -185,7 +116,7 @@ export default function Home() {
               value={query}
               onChange={handleQueryChange}
               placeholder="Try Elon Musk at 30"
-              aria-label="Search by name"
+              aria-label="Search by name, year, or age"
             />
             <Button type="submit">Search</Button>
           </form>
@@ -208,7 +139,12 @@ export default function Home() {
                   className="absolute top-8 h-7 w-px bg-slate-300"
                   style={{ left: `${tickPosition}%` }}
                 >
-                  <span className="absolute top-7 left-1/2 -translate-x-1/2 text-xs text-muted-foreground">
+                  <span
+                    className={cn(
+                      "absolute top-7 left-1/2 -translate-x-1/2 text-xs text-muted-foreground",
+                      year % 20 !== 0 && "hidden sm:inline"
+                    )}
+                  >
                     {year}
                   </span>
                 </div>
@@ -260,7 +196,7 @@ export default function Home() {
                     {mainPerson.name}
                   </h2>
                   <p className="mt-2 text-sm font-medium uppercase tracking-wider text-muted-foreground">
-                    Age {calculateAge(mainPerson)}
+                    Age {getAge(mainPerson, targetYear)}
                   </p>
                 </div>
                 <p className="max-w-2xl text-base leading-7 text-muted-foreground">
@@ -275,6 +211,12 @@ export default function Home() {
           <h2 className="text-xl font-semibold tracking-normal">
             Also alive in {targetYear}
           </h2>
+
+          {contemporaries.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No one else in the demo data was alive in {targetYear}.
+            </p>
+          ) : null}
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {contemporaries.map((person) => (
@@ -292,7 +234,7 @@ export default function Home() {
                       <div className="min-w-0">
                         <CardTitle>{person.name}</CardTitle>
                         <CardDescription>
-                          {person.category} · Age {calculateAge(person)}
+                          {person.category} · Age {getAge(person, targetYear)}
                         </CardDescription>
                       </div>
                     </div>

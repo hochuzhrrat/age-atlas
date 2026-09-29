@@ -1,45 +1,36 @@
 {
-    "query": "Madonna 15",
-    "resolved": {
-        "person": "Madonna",
-        "year": 1973,
-        "age": 15
-    },
-    "main_person": {
-        "id": "madonna",
-        "name": "Madonna",
-        "category": "Music",
-        "birthYear": 1958,
-        "age": 15,
-        "year": 1973,
-        "milestones": [
-            {
-                "year": 1958,
-                "text": "Born in Michigan"
-            },
-            {
-                "year": 1973,
-                "text": "Living in Michigan before fame"
-            },
-            {
-                "year": 1983,
-                "text": "Releasing early hits"
-            },
-            {
-                "year": 1990,
-                "text": "At the height of global pop fame"
-            }
-        ],
-        "image": "https://api.dicebear.com/7.x/initials/svg?seed=Madonna"
-    },
-    "contemporaries": [
+    "people": [
+        {
+            "id": "madonna",
+            "name": "Madonna",
+            "category": "Music",
+            "birthYear": 1958,
+            "milestones": [
+                {
+                    "year": 1958,
+                    "text": "Born in Michigan"
+                },
+                {
+                    "year": 1973,
+                    "text": "Living in Michigan before fame"
+                },
+                {
+                    "year": 1983,
+                    "text": "Releasing early hits"
+                },
+                {
+                    "year": 1990,
+                    "text": "At the height of global pop fame"
+                }
+            ],
+            "image": "https://api.dicebear.com/7.x/initials/svg?seed=Madonna"
+        },
         {
             "id": "michael-jackson",
             "name": "Michael Jackson",
             "category": "Music",
             "birthYear": 1958,
             "deathYear": 2009,
-            "age": 15,
             "milestones": [
                 {
                     "year": 1958,
@@ -58,7 +49,6 @@
                     "text": "Releasing Thriller"
                 }
             ],
-            "fact": "Performing with Jackson 5",
             "image": "https://api.dicebear.com/7.x/initials/svg?seed=Michael_Jackson"
         },
         {
@@ -66,7 +56,6 @@
             "name": "Barbra Streisand",
             "category": "Music",
             "birthYear": 1942,
-            "age": 31,
             "milestones": [
                 {
                     "year": 1942,
@@ -85,7 +74,6 @@
                     "text": "Directing and starring in Yentl"
                 }
             ],
-            "fact": "Starring in The Way We Were",
             "image": "https://api.dicebear.com/7.x/initials/svg?seed=Barbra_Streisand"
         },
         {
@@ -94,7 +82,6 @@
             "category": "Politics",
             "birthYear": 1926,
             "deathYear": 2016,
-            "age": 47,
             "milestones": [
                 {
                     "year": 1926,
@@ -113,7 +100,6 @@
                     "text": "Stepping down as president of Cuba"
                 }
             ],
-            "fact": "Leading Cuba and traveling globally",
             "image": "https://api.dicebear.com/7.x/initials/svg?seed=Fidel_Castro"
         },
         {
@@ -122,7 +108,6 @@
             "category": "Art",
             "birthYear": 1881,
             "deathYear": 1973,
-            "age": 91,
             "milestones": [
                 {
                     "year": 1881,
@@ -141,7 +126,6 @@
                     "text": "Still one of the world's most famous artists"
                 }
             ],
-            "fact": "Still one of the world's most famous artists",
             "image": "https://api.dicebear.com/7.x/initials/svg?seed=Pablo_Picasso"
         },
         {
@@ -149,7 +133,6 @@
             "name": "Steve Buscemi",
             "category": "Film",
             "birthYear": 1957,
-            "age": 15,
             "milestones": [
                 {
                     "year": 1957,
@@ -168,7 +151,6 @@
                     "text": "Appearing in Fargo"
                 }
             ],
-            "fact": "Still in school, years before acting",
             "image": "https://api.dicebear.com/7.x/initials/svg?seed=Steve_Buscemi"
         },
         {
@@ -176,7 +158,6 @@
             "name": "Elon Musk",
             "category": "Business",
             "birthYear": 1971,
-            "age": 2,
             "milestones": [
                 {
                     "year": 1971,
@@ -195,7 +176,6 @@
                     "text": "Founding SpaceX"
                 }
             ],
-            "fact": "Growing up in South Africa",
             "image": "https://api.dicebear.com/7.x/initials/svg?seed=Elon_Musk"
         }
     ]
