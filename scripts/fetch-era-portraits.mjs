@@ -30,6 +30,9 @@ const TOP = Number(process.env.TOP ?? 1000);
 const WORKERS = Number(process.env.WORKERS ?? 4);
 // ONLY="Bradley Cooper" limits a run to one person and prints what it finds.
 const ONLY = process.env.ONLY;
+// RETRY_EMPTY=1 looks again at people for whom nothing was found, in case
+// the earlier run hit Commons rate limits.
+const RETRY_EMPTY = process.env.RETRY_EMPTY === "1";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -87,13 +90,17 @@ async function fetchCommonsCategories(people) {
       const sitelink = entity?.sitelinks?.commonswiki?.title;
       const claim = entity?.claims?.P373?.[0]?.mainsnak?.datavalue?.value;
 
+      let category = person.name;
+
       if (typeof sitelink === "string" && sitelink.startsWith("Category:")) {
-        categories[person.id] = sitelink.replace(/^Category:/, "");
+        category = sitelink.replace(/^Category:/, "");
       } else if (typeof claim === "string") {
-        categories[person.id] = claim;
-      } else {
-        categories[person.id] = person.name;
+        category = claim;
       }
+
+      // Wikidata sometimes points at a year category ("Kylian Mbappé in
+      // 2026"); the person's own category is the part before it.
+      categories[person.id] = category.replace(/ in \d{4}$/, "");
     }
 
     process.stdout.write(`  Commons categories ${Math.min(index + 50, people.length)}/${people.length}\r`);
@@ -182,7 +189,10 @@ async function main() {
   const top = ONLY
     ? people.filter((person) => person.name === ONLY)
     : [...people].sort((a, b) => (b.views ?? 0) - (a.views ?? 0)).slice(0, TOP);
-  const pending = top.filter((person) => !cache[person.id] || ONLY);
+  const pending = top.filter(
+    (person) =>
+      !cache[person.id] || ONLY || (RETRY_EMPTY && cache[person.id].portraits.length === 0)
+  );
 
   console.log(`Era portraits for the top ${top.length} by views: ${top.length - pending.length} cached, ${pending.length} to fetch`);
 
