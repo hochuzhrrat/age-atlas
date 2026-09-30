@@ -42,7 +42,7 @@ The MVP includes:
 - person + age → calculate year
 - 4-digit number only → treat as year for the current person
 - 1–3 digit number only → treat as age of the current person
-- year outside the person's lifespan → show a message, keep the current result
+- year outside the person's lifespan → still show it; the person is marked as not yet born or no longer alive
 - always show both year and age in result
 
 ## Output structure

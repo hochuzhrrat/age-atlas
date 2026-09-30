@@ -1,4 +1,4 @@
-import { findPersonByName, isAliveIn, type Person } from "@/lib/people";
+import type { Person } from "@/lib/people";
 
 export type SearchResult =
   | { ok: true; person: Person; year: number }
@@ -29,6 +29,55 @@ export function parseQuery(query: string): ParsedQuery {
   };
 }
 
+function normalize(text: string) {
+  return text
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Best match wins: the whole name, then a whole word ("Picasso"), then the
+// start of a word ("Pic"), then anything inside; ties go to the better known.
+export function findPersonByName(people: Person[], name: string) {
+  const query = normalize(name);
+
+  if (!query) {
+    return undefined;
+  }
+
+  let best: { person: Person; score: number } | undefined;
+
+  for (const person of people) {
+    const candidate = normalize(person.name);
+    const words = candidate.split(" ");
+    let score = 0;
+
+    if (candidate === query) {
+      score = 4;
+    } else if (words.includes(query) || candidate.startsWith(`${query} `)) {
+      score = 3;
+    } else if (words.some((word) => word.startsWith(query))) {
+      score = 2;
+    } else if (candidate.includes(query)) {
+      score = 1;
+    }
+
+    if (
+      score > 0 &&
+      (!best ||
+        score > best.score ||
+        (score === best.score && person.views > best.person.views))
+    ) {
+      best = { person, score };
+    }
+  }
+
+  return best?.person;
+}
+
 export function resolveSearch(
   query: string,
   people: Person[],
@@ -46,28 +95,16 @@ export function resolveSearch(
     : currentPerson;
 
   if (!person) {
-    return { ok: false, message: `No “${parsed.name}” in the demo data yet` };
+    return { ok: false, message: `No “${parsed.name}” in the library yet` };
   }
 
   const year =
     parsed.year ??
     (parsed.age !== undefined ? person.birthYear + parsed.age : currentYear);
 
-  if (!isAliveIn(person, year)) {
-    return { ok: false, message: describeOutOfLifespan(person, year) };
+  if (year > currentYear) {
+    return { ok: false, message: `${year} hasn’t happened yet` };
   }
 
   return { ok: true, person, year };
-}
-
-function describeOutOfLifespan(person: Person, year: number) {
-  if (year > new Date().getFullYear()) {
-    return `${year} hasn’t happened yet`;
-  }
-
-  if (year < person.birthYear) {
-    return `${person.name} wasn’t born yet in ${year} (born ${person.birthYear})`;
-  }
-
-  return `${person.name} was no longer alive in ${year} (${person.birthYear}–${person.deathYear})`;
 }
