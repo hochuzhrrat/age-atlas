@@ -1,13 +1,22 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Geist } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
+
+const geistMono = Geist_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+});
 
 export const metadata: Metadata = {
   title: "Age Atlas",
-  description: "A minimal Next.js app for Age Atlas.",
+  description:
+    "Compare lives in the same moment: pick a person and a year or age, and see who else was alive then.",
 };
 
 export default function RootLayout({
@@ -16,8 +25,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("h-full antialiased", "font-sans", geist.variable)}>
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html
+      lang="en"
+      className={cn("h-full", geist.variable, geistMono.variable)}
+    >
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
 }
