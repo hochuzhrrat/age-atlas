@@ -137,13 +137,21 @@ async function fetchYearCategories(category) {
   }));
 }
 
-// A cropped single-person shot beats a group photo.
+// A cropped single-person shot beats a two-person one; class, team, cast
+// and family pictures are no portrait at all and are skipped.
+function scoreFile(title) {
+  return (
+    (/crop/i.test(title) ? 2 : 0) +
+    (/\b(and|with)\b/i.test(title) ? -1 : 0) +
+    (/\b(class|team|group|cast|family|crowd|audience|panel|members|delegation|meeting|crew|band|squad|wedding|funeral)\b/i.test(title) ? -2 : 0)
+  );
+}
+
 function pickFile(files) {
   const images = files.filter((title) => /\.(jpe?g|png|webp)$/i.test(title));
-  const score = (title) =>
-    (/crop/i.test(title) ? 2 : 0) + (/\band\b|with|group|cast|team/i.test(title) ? -1 : 0);
+  const best = images.sort((a, b) => scoreFile(b) - scoreFile(a))[0];
 
-  return images.sort((a, b) => score(b) - score(a))[0]?.replace(/^File:/, "");
+  return best && scoreFile(best) >= 0 ? best.replace(/^File:/, "") : undefined;
 }
 
 async function fetchCredits(files) {
@@ -286,7 +294,10 @@ async function main() {
   let total = 0;
 
   for (const person of top) {
-    const portraits = (cache[person.id]?.portraits ?? []).sort((a, b) => a.year - b.year);
+    // Earlier runs may have kept files the rule above now rejects.
+    const portraits = (cache[person.id]?.portraits ?? [])
+      .filter((portrait) => scoreFile(portrait.file) >= 0)
+      .sort((a, b) => a.year - b.year);
 
     if (portraits.length > 0) {
       output[person.id] = portraits;
