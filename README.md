@@ -19,6 +19,11 @@ The search field always holds a query that reproduces the current view
 ("Charles III at 41"), like an address bar: focus selects it all, so typing
 replaces it, and changing the number is one edit away. `/` focuses the field.
 
+While a name is typed, the six best matches drop down under the field, with
+domain and years to tell namesakes apart; picking one keeps the year or age
+typed with it ("dario 33" → "Dario Amodei at 33"). Matches come from
+`/api/suggest`, so the library never leaves the server.
+
 ## Development
 
 ```bash
@@ -39,18 +44,28 @@ npm run data:portraits    # Commons → src/data/portraits.json (dated portraits
 npm run data:milestones   # Wikipedia + Claude → src/data/milestones.json
 ```
 
-- `scripts/build-people.mjs` asks Wikidata, one birth year at a time, for the
-  60 most-linked people per birth year, 1800–2010, who have a portrait on
-  Wikimedia Commons and an English Wikipedia article. Portrait author, licence
-  and the year the photo was taken come from the Commons API; English
-  Wikipedia views over the last twelve months from the pageviews API. Tune
-  with `FROM_YEAR`, `TO_YEAR`, `PER_YEAR`, `MIN_SITELINKS`.
+- `scripts/build-people.mjs` builds the library from two sources. Wikidata,
+  one birth year at a time: the 60 most-linked people per birth year,
+  1800–2010, with a portrait on Wikimedia Commons and an English Wikipedia
+  article — the backbone for the 19th century. Then what English Wikipedia
+  readers actually look up: every article in the daily top thousand over the
+  last year (`TOP_DAYS=365`), resolved to Wikidata; the people among them join
+  whatever their sitelinks count, because sitelinks reward encyclopaedic
+  reach and the atlas is for readers (Dario Fo has 109 Wikipedias and 45k
+  views a year; Dario Amodei 31 and 2.9M). Portrait author, licence and the
+  year the photo was taken come from the Commons API; English Wikipedia views
+  over the last twelve months from the pageviews API. Tune with `FROM_YEAR`,
+  `TO_YEAR`, `PER_YEAR`, `MIN_SITELINKS`, `TOP_DAYS`.
 - `scripts/fetch-era-portraits.mjs` collects, for the `TOP=1000` most viewed
   people, one portrait per year from Commons' "<Person> in <year>" categories.
-  The page shows the portrait nearest to the selected year and notes the photo
-  year when it is clearly a different one ("photo 2019"). Childhood photos are
-  almost never freely licensed, so a 13-year-old is still shown as an adult,
-  but labelled.
+  A year category often holds co-stars and team-mates photographed at the
+  same event, so a file that names the person wins, a cropped single shot
+  beats a pair, and titles listing three or more people, or opening with
+  someone else's name, are skipped (`REPICK=1` re-applies the rules to years
+  already fetched). The page shows the portrait nearest to the selected year
+  and notes the photo year when it is clearly a different one ("photo 2019").
+  Childhood photos are almost never freely licensed, so a 13-year-old is still
+  shown as an adult, but labelled.
 - `scripts/extract-milestones.mjs` sends each person's Wikipedia article to
   Claude through the Message Batches API and stores 8–12 dated one-line
   milestones per person. Needs `ANTHROPIC_API_KEY` in `.env.local`. Resumable;
@@ -75,11 +90,12 @@ set.
 ## Project layout
 
 - `src/app/page.tsx` — server page: resolves the URL (`?q=`, or `?p=&y=&s=`) into a view
+- `src/app/api/suggest/route.ts` — name suggestions for the search field
 - `src/components/atlas.tsx` — the page UI: search, subject block, chart, credits
 - `src/components/atlas-chart.tsx` — lifespan chart with the draggable year rule and Shuffle
 - `src/lib/data.ts` — loads the library and resolves a view (server only)
 - `src/lib/select.ts` — seeded selection of the six contemporaries
-- `src/lib/query.ts` — search parsing and name matching
+- `src/lib/query.ts` — search parsing and ranked name matching
 - `src/lib/people.ts` — person types and age / fact / portrait helpers
 - `src/data/people.json`, `src/data/portraits.json`, `src/data/milestones.json` — the library
 - `docs/my_docs/` — product (`prd.md`) and tech (`tech.md`) notes

@@ -1,13 +1,21 @@
 #!/usr/bin/env node
 // Builds src/data/people.json: notable people born 1800–2010 with a portrait
-// on Wikimedia Commons and an English Wikipedia article, from Wikidata.
+// on Wikimedia Commons and an English Wikipedia article, from two sources.
 //
 //   node scripts/build-people.mjs
 //
-// Wikidata is queried one birth year at a time (a single query over all humans
-// times out). Raw results and Commons credits are cached in scripts/.cache so
-// re-runs only fetch what is missing. Tune with env vars:
-//   FROM_YEAR=1800 TO_YEAR=2010 PER_YEAR=60 MIN_SITELINKS=40
+// 1. Wikidata, one birth year at a time (a single query over all humans times
+//    out): the most-linked people of each year. Sitelinks reward encyclopaedic
+//    reach, so this is the backbone for the 19th century.
+// 2. What English Wikipedia readers actually look up: the thousand most viewed
+//    articles of each of the last TOP_DAYS days, resolved to Wikidata. The
+//    humans among them join whatever their sitelinks count — the atlas is for
+//    readers, and a CEO with 31 Wikipedias and 2.9M views a year matters more
+//    than a playwright with 109 Wikipedias and 45k.
+//
+// Raw results and Commons credits are cached in scripts/.cache so re-runs only
+// fetch what is missing. Tune with env vars:
+//   FROM_YEAR=1800 TO_YEAR=2010 PER_YEAR=60 MIN_SITELINKS=40 TOP_DAYS=365
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -23,24 +31,28 @@ const SPARQL_URL = "https://query.wikidata.org/sparql";
 const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
 const PAGEVIEWS_API =
   "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia.org/all-access/user";
+const TOP_API = "https://wikimedia.org/api/rest_v1/metrics/pageviews/top/en.wikipedia/all-access";
+const WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php";
 
 const FROM_YEAR = Number(process.env.FROM_YEAR ?? 1800);
 const TO_YEAR = Number(process.env.TO_YEAR ?? 2010);
 const PER_YEAR = Number(process.env.PER_YEAR ?? 60);
 const MIN_SITELINKS = Number(process.env.MIN_SITELINKS ?? 40);
+// Days of daily top-1000 lists to read; 0 skips the readers' source.
+const TOP_DAYS = Number(process.env.TOP_DAYS ?? 365);
 
 // Domain is read from the Wikidata description first ("American singer,
 // songwriter…" leads with the main identity), then from the occupation list.
 // Order matters only for ties in the occupation fallback.
 const DOMAINS = [
   ["Music", /singer|musician|composer|songwriter|rapper|pianist|conductor|guitarist|drummer|violinist|\bdj\b|band|record producer|music/i],
-  ["Film & TV", /\bactor|actress|film|television|screenwriter|comedian|presenter|\btv\b|youtuber|animator|filmmaker|cinema/i],
+  ["Film & TV", /\bactor|actress|film|television|screenwriter|comedian|presenter|\btv\b|youtuber|animator|filmmaker|cinema|internet|streamer|podcast|social media|media personality|reality/i],
   ["Art & Design", /painter|sculptor|photographer|architect|designer|\bartist|illustrator|cartoonist|printmaker|ceramist|graffiti/i],
   ["Literature", /writer|poet|novelist|journalist|playwright|author|essayist|critic|lyricist|translator|philosopher|historian|linguist/i],
   ["Politics", /politician|president|prime minister|chancellor|diplomat|monarch|\bking\b|queen|emperor|empress|dictator|revolutionary|activist|statesman|stateswoman|minister|senator|governor|mayor|lawyer|judge|jurist|first lady|princess|prince\b|duke|leader of/i],
   ["Science", /physicist|chemist|biologist|mathematician|engineer|inventor|scientist|astronaut|cosmonaut|economist|psycholog|psychiatr|psychoanaly|physician|surgeon|astronomer|geolog|computer|programmer|researcher|neuro|sociolog|anthropolog|archaeolog|explorer|aviator|naturalist|zoolog|botanist|physiolog|virolog|geneticist|patholog|pharmac|epidemiolog|paleontolog|pilot/i],
   ["Sport", /footballer|player|athlete|boxer|tennis|racing driver|swimmer|gymnast|cyclist|chess|wrestler|coach|golfer|skier|skater|sprinter|runner|martial art|jockey|referee|olympi|basketball|baseball|hockey|cricketer|rugby|sport|climber|surfer|bodybuilder|equestrian|fencer|rower|sailor|weightlifter|footballer|mixed martial/i],
-  ["Business", /entrepreneur|businessperson|businessman|businesswoman|business magnate|business|executive|industrialist|banker|investor|chief executive|merchant|philanthropist|billionaire|tycoon|financier/i],
+  ["Business", /entrepreneur|businessperson|businessman|businesswoman|business magnate|business|executive|industrialist|banker|investor|chief executive|\bceo\b|founder|merchant|philanthropist|billionaire|tycoon|financier/i],
   ["Fashion", /\bmodel\b|fashion|couturier|stylist|supermodel/i],
   ["Military", /military|general\b|admiral|officer|soldier|marshal|commander|warlord|aviator/i],
   ["Religion", /priest|bishop|pope|theologian|rabbi|imam|cleric|monk|\bnun\b|religious|saint|preacher|missionary|cardinal|dalai lama|guru|evangelist/i],
@@ -168,6 +180,28 @@ ORDER BY DESC(?sitelinks)
 LIMIT ${PER_YEAR * 2}`;
 }
 
+// The same columns for a given set of items, so both sources feed toPerson.
+function sparqlForItems(ids) {
+  return `
+SELECT ?item ?itemLabel ?itemDescription ?sitelinks ?dob ?dod ?image ?article
+       (GROUP_CONCAT(DISTINCT ?occLabel; separator="|") AS ?occupations)
+       (SAMPLE(?countryLabel) AS ?country)
+WHERE {
+  VALUES ?item { ${ids.map((id) => `wd:${id}`).join(" ")} }
+  ?item wdt:P31 wd:Q5 ;
+        wdt:P569 ?dob ;
+        wdt:P18 ?image ;
+        wikibase:sitelinks ?sitelinks .
+  FILTER(?dob >= "${FROM_YEAR}-01-01T00:00:00Z"^^xsd:dateTime && ?dob < "${TO_YEAR + 1}-01-01T00:00:00Z"^^xsd:dateTime)
+  ?article schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> .
+  OPTIONAL { ?item wdt:P570 ?dod . }
+  OPTIONAL { ?item wdt:P106 ?occ . ?occ rdfs:label ?occLabel . FILTER(LANG(?occLabel) = "en") }
+  OPTIONAL { ?item wdt:P27 ?c . ?c rdfs:label ?countryLabel . FILTER(LANG(?countryLabel) = "en") }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+}
+GROUP BY ?item ?itemLabel ?itemDescription ?sitelinks ?dob ?dod ?image ?article`;
+}
+
 async function readCache(name) {
   try {
     return JSON.parse(await readFile(path.join(CACHE_DIR, name), "utf8"));
@@ -204,6 +238,159 @@ async function fetchYear(year) {
   return bindings;
 }
 
+// Titles that are not articles: the main page and the other namespaces.
+const NOT_AN_ARTICLE =
+  /^(Main_Page$|(Special|Wikipedia|Portal|Help|File|Category|Template|Talk|User|Draft|Module|Book|MediaWiki|TimedText|Gadget|Wikipedia_talk|User_talk|Template_talk|File_talk|Category_talk|Portal_talk|Help_talk|Module_talk|Draft_talk):)/;
+
+// Every article in the daily top thousand over the last TOP_DAYS days,
+// ending two days ago (the latest day is often not published yet).
+async function fetchTopArticles() {
+  const cacheName = "top-articles.json";
+  const cache = (await readCache(cacheName)) ?? {};
+  const last = new Date();
+  last.setUTCDate(last.getUTCDate() - 2);
+  const days = Array.from({ length: TOP_DAYS }, (_, index) => {
+    const day = new Date(last);
+    day.setUTCDate(last.getUTCDate() - index);
+    return day.toISOString().slice(0, 10);
+  });
+  const missing = days.filter((day) => !cache[day]);
+
+  console.log(`Top articles: ${days.length - missing.length} days cached, ${missing.length} to fetch`);
+
+  for (const [index, day] of missing.entries()) {
+    const response = await fetchWithRetry(`${TOP_API}/${day.replaceAll("-", "/")}`, {}, `top ${day}`);
+    const articles = (await response.json()).items?.[0]?.articles ?? [];
+
+    cache[day] = articles.map((article) => article.article);
+
+    if (index % 10 === 9 || index === missing.length - 1) {
+      await writeCache(cacheName, cache);
+      process.stdout.write(`  ${index + 1}/${missing.length}\r`);
+    }
+
+    // The top lists are rate-limited far more strictly than per-article views.
+    await sleep(1500);
+  }
+
+  const titles = new Set();
+
+  for (const day of days) {
+    for (const title of cache[day] ?? []) {
+      if (!NOT_AN_ARTICLE.test(title)) {
+        titles.add(title);
+      }
+    }
+  }
+
+  return [...titles];
+}
+
+// Article titles → Wikidata ids, 50 per call, following redirects. Titles
+// that resolve to nothing are remembered as null.
+async function resolveItems(titles) {
+  const cacheName = "wikipedia-items.json";
+  const cache = (await readCache(cacheName)) ?? {};
+  const missing = titles.filter((title) => !(title in cache));
+
+  console.log(`Wikidata ids: ${titles.length - missing.length} titles cached, ${missing.length} to resolve`);
+
+  for (let index = 0; index < missing.length; index += 50) {
+    const batch = missing.slice(index, index + 50);
+    const params = new URLSearchParams({
+      action: "query",
+      prop: "pageprops",
+      ppprop: "wikibase_item",
+      titles: batch.join("|"),
+      redirects: "1",
+      format: "json",
+      formatversion: "2",
+    });
+    const response = await fetchWithRetry(
+      WIKIPEDIA_API,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params,
+      },
+      `wikipedia ${index}`
+    );
+    const data = await response.json();
+    // Back from the page title to the title we asked for, through
+    // normalisation ("Dario_Amodei" → "Dario Amodei") and redirects.
+    const asked = new Map();
+
+    for (const { from, to } of data.query?.normalized ?? []) {
+      asked.set(to, from);
+    }
+
+    for (const { from, to } of data.query?.redirects ?? []) {
+      asked.set(to, asked.get(from) ?? from);
+    }
+
+    for (const page of data.query?.pages ?? []) {
+      const title = asked.get(page.title) ?? page.title;
+      cache[title] = page.ns === 0 ? (page.pageprops?.wikibase_item ?? null) : null;
+    }
+
+    for (const title of batch) {
+      cache[title] ??= null;
+    }
+
+    if ((index / 50) % 20 === 19 || index + 50 >= missing.length) {
+      await writeCache(cacheName, cache);
+      process.stdout.write(`  ${Math.min(index + 50, missing.length)}/${missing.length}\r`);
+    }
+
+    await sleep(100);
+  }
+
+  return [...new Set(titles.map((title) => cache[title]).filter(Boolean))];
+}
+
+// The people among the given items, in the same shape as the yearly query,
+// 200 items per SPARQL call. Items that are not people (or have no portrait,
+// or were born outside the range) are remembered as null.
+async function fetchItems(ids) {
+  const cacheName = "wikidata-items.json";
+  const cache = (await readCache(cacheName)) ?? {};
+  const missing = ids.filter((id) => !(id in cache));
+
+  console.log(`Wikidata items: ${ids.length - missing.length} cached, ${missing.length} to fetch`);
+
+  for (let index = 0; index < missing.length; index += 200) {
+    const batch = missing.slice(index, index + 200);
+    const response = await fetchWithRetry(
+      SPARQL_URL,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/sparql-results+json",
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ query: sparqlForItems(batch) }),
+      },
+      `wikidata items ${index}`
+    );
+    const bindings = (await response.json()).results.bindings;
+
+    for (const id of batch) {
+      cache[id] = null;
+    }
+
+    for (const binding of bindings) {
+      const id = value(binding, "item").split("/").pop();
+      cache[id] ??= binding;
+    }
+
+    await writeCache(cacheName, cache);
+    process.stdout.write(`  ${Math.min(index + 200, missing.length)}/${missing.length}\r`);
+    await sleep(300);
+  }
+
+  return ids.map((id) => cache[id]).filter(Boolean);
+}
+
 function value(binding, key) {
   return binding[key]?.value ?? "";
 }
@@ -216,16 +403,18 @@ function wikipediaTitle(binding) {
   return decodeURIComponent(value(binding, "article").split("/wiki/")[1] ?? "").replace(/_/g, " ");
 }
 
-// The label service occasionally hands back the id instead of the label;
-// the article title, minus a disambiguator like "(musician)", is a fine name.
+// The English Wikipedia title, minus a disambiguator like "(musician)", is
+// the name English readers know; Wikidata labels are occasionally vandalised
+// ("Lamine Yamal israel") or hand back the id instead of the label.
 function nameOf(binding) {
+  const title = wikipediaTitle(binding).replace(/\s*\([^)]*\)\s*$/, "").trim();
   const label = value(binding, "itemLabel");
 
-  if (label && !/^Q\d+$/.test(label)) {
-    return label;
+  if (title) {
+    return title;
   }
 
-  return wikipediaTitle(binding).replace(/\s*\([^)]*\)\s*$/, "");
+  return label && !/^Q\d+$/.test(label) ? label : "";
 }
 
 function toPerson(binding) {
@@ -413,6 +602,26 @@ async function main() {
         break;
       }
     }
+  }
+
+  console.log(`${people.size} people from the yearly queries`);
+
+  if (TOP_DAYS > 0) {
+    const titles = await fetchTopArticles();
+    const ids = await resolveItems(titles);
+    const bindings = await fetchItems(ids.filter((id) => !people.has(id)));
+    let added = 0;
+
+    for (const binding of bindings) {
+      const person = toPerson(binding);
+
+      if (!people.has(person.id) && person.name && person.wikipedia) {
+        people.set(person.id, person);
+        added += 1;
+      }
+    }
+
+    console.log(`Readers: ${titles.length} articles, ${ids.length} items, ${added} people added`);
   }
 
   const list = [...people.values()];

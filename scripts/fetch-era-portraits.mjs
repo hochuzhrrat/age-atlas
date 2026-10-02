@@ -10,6 +10,7 @@
 // Env vars:
 //   TOP=1000   how many people, by Wikipedia views
 //   WORKERS=4  parallel Commons requests
+//   REPICK=1   look again at years whose file does not name the person
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -33,6 +34,9 @@ const ONLY = process.env.ONLY;
 // RETRY_EMPTY=1 looks again at people for whom nothing was found, in case
 // the earlier run hit Commons rate limits.
 const RETRY_EMPTY = process.env.RETRY_EMPTY === "1";
+// REPICK=1 revisits the years whose chosen file does not name the person,
+// after a change to the picking rules.
+const REPICK = process.env.REPICK === "1";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -137,21 +141,54 @@ async function fetchYearCategories(category) {
   }));
 }
 
-// A cropped single-person shot beats a two-person one; class, team, cast
-// and family pictures are no portrait at all and are skipped.
-function scoreFile(title) {
+function normalizeTitle(text) {
+  return text
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+// Whether a file title names the person ("Michael B. Jordan (36077900272)"):
+// a whole word of the title is a word of the name, initials aside.
+function namesPerson(title, person) {
+  const words = normalizeTitle(title).split(" ");
+  return normalizeTitle(person.name)
+    .split(" ")
+    .filter((token) => token.length >= 3)
+    .some((token) => words.includes(token));
+}
+
+// A file that names the person outranks one that does not: a year category
+// often holds co-stars and team-mates photographed at the same event. Then a
+// cropped single-person shot beats a two-person one, and a title listing
+// three or more people ("Stallone, Thompson, and Jordan") is no portrait at
+// all, like class, team, cast and family pictures. A title that does not
+// name the person but opens with someone's name ("Arne Duncan at …") is
+// most likely that someone. A title dated to a clearly different year
+// ("… 2011" filed under 2008) loses a point.
+function scoreFile(title, person, year) {
+  const named = namesPerson(title, person);
+  const dated = /\b(18|19|20)\d{2}\b/.exec(title);
+  const listed = (title.match(/,|&|\b(and|with)\b/gi) ?? []).length;
+  const opensWithName = /^(File:)?[A-Z][a-z]+ [A-Z][a-z]+/.test(title);
+
   return (
+    (named ? 3 : 0) +
     (/crop/i.test(title) ? 2 : 0) +
-    (/\b(and|with)\b/i.test(title) ? -1 : 0) +
-    (/\b(class|team|group|cast|family|crowd|audience|panel|members|delegation|meeting|crew|band|squad|wedding|funeral)\b/i.test(title) ? -2 : 0)
+    (listed >= 2 ? -4 : listed === 1 ? -1 : 0) +
+    (!named && opensWithName ? -1 : 0) +
+    (dated && Math.abs(Number(dated[0]) - year) > 1 ? -1 : 0) +
+    (/\b(class|team|group|cast|family|crowd|audience|panel\w*|members|delegation|meeting|crew|band|squad|wedding|funeral)\b/i.test(title) ? -2 : 0)
   );
 }
 
-function pickFile(files) {
+function pickFile(files, person, year) {
   const images = files.filter((title) => /\.(jpe?g|png|webp)$/i.test(title));
-  const best = images.sort((a, b) => scoreFile(b) - scoreFile(a))[0];
+  const best = images.sort((a, b) => scoreFile(b, person, year) - scoreFile(a, person, year))[0];
 
-  return best && scoreFile(best) >= 0 ? best.replace(/^File:/, "") : undefined;
+  return best && scoreFile(best, person, year) >= 0 ? best.replace(/^File:/, "") : undefined;
 }
 
 async function fetchCredits(files) {
@@ -199,7 +236,10 @@ async function main() {
     : [...people].sort((a, b) => (b.views ?? 0) - (a.views ?? 0)).slice(0, TOP);
   const pending = top.filter(
     (person) =>
-      !cache[person.id] || ONLY || (RETRY_EMPTY && cache[person.id].portraits.length === 0)
+      !cache[person.id] ||
+      ONLY ||
+      (RETRY_EMPTY && cache[person.id].portraits.length === 0) ||
+      (REPICK && cache[person.id].portraits.some((portrait) => !namesPerson(portrait.file, person)))
   );
 
   console.log(`Era portraits for the top ${top.length} by views: ${top.length - pending.length} cached, ${pending.length} to fetch`);
@@ -212,7 +252,15 @@ async function main() {
     while (queue.length > 0) {
       const person = queue.shift();
       const category = categories[person.id];
-      const entry = { category: category ?? null, portraits: [] };
+      // With REPICK, only the years whose file does not name the person are
+      // looked at again; the rest of the entry is kept.
+      const previous = REPICK && !ONLY ? cache[person.id] : undefined;
+      const redo = previous
+        ? new Set(previous.portraits.filter((portrait) => !namesPerson(portrait.file, person)).map((portrait) => portrait.year))
+        : undefined;
+      const entry = previous
+        ? { ...previous, portraits: previous.portraits.filter((portrait) => !redo.has(portrait.year)) }
+        : { category: category ?? null, portraits: [] };
 
       if (ONLY) {
         console.log(`  ${person.name}: Commons category ${category ?? "none"}`);
@@ -232,6 +280,10 @@ async function main() {
             continue;
           }
 
+          if (redo && !redo.has(yearCategory.year)) {
+            continue;
+          }
+
           let files = await listMembers(yearCategory.category, "file");
 
           // Some year categories only hold event subcategories
@@ -244,14 +296,19 @@ async function main() {
             }
           }
 
-          const file = pickFile(files);
+          const file = pickFile(files, person, yearCategory.year);
 
           if (file) {
             entry.portraits.push({ year: yearCategory.year, file });
           }
+
+          if (ONLY) {
+            console.log(`  ${yearCategory.year}: ${file ?? "nothing usable"} (${files.length} files)`);
+          }
         }
       }
 
+      entry.portraits.sort((a, b) => a.year - b.year);
       cache[person.id] = entry;
       done += 1;
 
@@ -289,6 +346,11 @@ async function main() {
 
   await writeFile(CACHE_FILE, JSON.stringify(cache));
 
+  if (ONLY) {
+    console.log("ONLY run: cache updated, portraits.json left as is");
+    return;
+  }
+
   const output = {};
   let withPortraits = 0;
   let total = 0;
@@ -296,7 +358,7 @@ async function main() {
   for (const person of top) {
     // Earlier runs may have kept files the rule above now rejects.
     const portraits = (cache[person.id]?.portraits ?? [])
-      .filter((portrait) => scoreFile(portrait.file) >= 0)
+      .filter((portrait) => scoreFile(portrait.file, person, portrait.year) >= 0)
       .sort((a, b) => a.year - b.year);
 
     if (portraits.length > 0) {
