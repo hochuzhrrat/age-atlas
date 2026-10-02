@@ -289,7 +289,10 @@ function Row({
           {alive ? getAge(person, year) : "—"}
         </span>
 
-        <span className="relative col-span-2 mt-3 block h-8 md:col-span-1 md:mt-0 md:h-auto">
+        {/* On a phone the row reads top to bottom — who, how old, what they
+            were doing — and the lifespan bar closes it, so the year rule
+            still runs through every row. */}
+        <span className="relative order-4 col-span-2 mt-2 block h-6 md:order-none md:col-span-1 md:mt-0 md:h-auto">
           <span
             aria-hidden
             className="absolute inset-x-0 top-1/2 h-px bg-border"
@@ -315,7 +318,7 @@ function Row({
           ) : null}
         </span>
 
-        <span className="col-span-2 mt-3 line-clamp-2 text-sm leading-6 md:col-span-1 md:mt-0 md:self-center md:py-3">
+        <span className="order-3 col-span-2 mt-2 line-clamp-2 text-sm leading-6 md:order-none md:col-span-1 md:mt-0 md:self-center md:py-3">
           {alive ? getFactForYear(person, year) : describeAbsence(person, year)}
         </span>
       </button>
