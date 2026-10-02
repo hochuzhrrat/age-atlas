@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ChangeEvent,
   FocusEvent,
   FormEvent,
   useEffect,
@@ -10,10 +9,10 @@ import {
   useTransition,
 } from "react";
 import { useRouter } from "next/navigation";
+import { Autocomplete } from "@base-ui/react/autocomplete";
 import { ArrowRightIcon } from "lucide-react";
 import { AtlasChart, PortraitImage } from "@/components/atlas-chart";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   clampToLife,
   getAge,
@@ -23,11 +22,18 @@ import {
   pluralYears,
   portraitFor,
   type Person,
+  type Suggestion,
 } from "@/lib/people";
+import { parseQuery, queryWithName } from "@/lib/query";
 import { cn } from "@/lib/utils";
 
 const LABEL =
   "font-mono text-[11px] tracking-[0.06em] text-muted-foreground uppercase";
+
+// Names are suggested once this much of one is typed; with a little more,
+// an empty result is worth saying out loud.
+const SUGGEST_FROM = 2;
+const EMPTY_FROM = 3;
 
 type AtlasProps = {
   subject: Person;
@@ -63,6 +69,13 @@ export function Atlas({
     initialQuery || queryFor(subject, initialYear)
   );
   const inputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  // Name suggestions for what has been typed since the page loaded; the
+  // mirrored query itself never asks for any.
+  const [typed, setTyped] = useState(false);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestedFor, setSuggestedFor] = useState("");
+  const [open, setOpen] = useState(false);
   const subjectAlive = isAliveIn(subject, year);
   const subjectPortrait = portraitFor(subject, year);
   const subjectNote = photoNote(subjectPortrait, year);
@@ -82,6 +95,39 @@ export function Atlas({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!typed) {
+      return;
+    }
+
+    const { name } = parseQuery(query);
+
+    if (name.length < SUGGEST_FROM) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/suggest?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal,
+        });
+        const found: Suggestion[] = await response.json();
+
+        setSuggestions(found);
+        setSuggestedFor(query);
+        setOpen(found.length > 0 || name.length >= EMPTY_FROM);
+      } catch {
+        // Aborted by further typing, or offline: keep what is shown.
+      }
+    }, 120);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query, typed]);
 
   // Everything the page shows lives in the URL, so every view has a link.
   function navigate(params: Record<string, string | number>, replace = false) {
@@ -115,8 +161,24 @@ export function Atlas({
     navigate({ q: example });
   }
 
-  function handleQueryChange(event: ChangeEvent<HTMLInputElement>) {
-    setQuery(event.target.value);
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    setTyped(true);
+
+    if (parseQuery(value).name.length < SUGGEST_FROM) {
+      setSuggestions([]);
+      setOpen(false);
+    }
+  }
+
+  // A suggested name takes the place of the typed one; the year or age
+  // typed with it stays ("dario 33" → "Dario Amodei at 33").
+  function pickSuggestion(person: Suggestion) {
+    const next = queryWithName(suggestedFor || query, person.name);
+
+    setOpen(false);
+    setQuery(next);
+    navigate({ q: next });
   }
 
   // Typing replaces the mirrored query instead of appending to it.
@@ -153,16 +215,60 @@ export function Atlas({
         </div>
 
         <div className="flex flex-col gap-2">
-          <form onSubmit={onSearch} className="flex">
-            <Input
-              ref={inputRef}
+          <form ref={formRef} onSubmit={onSearch} className="flex">
+            <Autocomplete.Root
+              items={suggestions}
+              // The server already chose the six; nothing to filter here.
+              filter={null}
+              mode="none"
               value={query}
-              onChange={handleQueryChange}
-              onFocus={handleQueryFocus}
-              placeholder="Name, age or year"
-              aria-label="Search by name, year, or age"
-              className="h-12 rounded-none border-hairline-strong bg-transparent px-4 text-base focus-visible:border-foreground focus-visible:ring-0 md:text-base dark:bg-transparent"
-            />
+              onValueChange={handleQueryChange}
+              open={open}
+              onOpenChange={setOpen}
+              inputRef={inputRef}
+              itemToStringValue={(person: Suggestion) => person.name}
+            >
+              <Autocomplete.Input
+                onFocus={handleQueryFocus}
+                placeholder="Name, age or year"
+                aria-label="Search by name, year, or age"
+                className="h-12 w-full min-w-0 rounded-none border border-hairline-strong bg-transparent px-4 text-base transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-foreground"
+              />
+              <Autocomplete.Portal>
+                <Autocomplete.Positioner
+                  anchor={formRef}
+                  align="start"
+                  sideOffset={-1}
+                  className="z-50 outline-none"
+                >
+                  {/* Continues the box of the field: same border, no radius,
+                      one hairline between rows. */}
+                  <Autocomplete.Popup className="w-(--anchor-width) border border-hairline-strong bg-background shadow-[0_16px_40px_-24px_rgba(0,0,0,0.4)] outline-none">
+                    <Autocomplete.Empty className="px-4 py-3 text-sm text-muted-foreground">
+                      No one by that name in the library yet
+                    </Autocomplete.Empty>
+                    <Autocomplete.List>
+                      {(person: Suggestion) => (
+                        <Autocomplete.Item
+                          key={person.id}
+                          value={person}
+                          onClick={() => pickSuggestion(person)}
+                          className="flex cursor-default items-baseline justify-between gap-4 border-t border-border px-4 py-2.5 text-base first:border-t-0 data-highlighted:bg-surface"
+                        >
+                          <span className="truncate">{person.name}</span>
+                          <span className={cn(LABEL, "flex shrink-0 gap-x-3 tabular-nums")}>
+                            <span>{person.domain}</span>
+                            <span>
+                              {person.birthYear}–{person.deathYear ?? ""}
+                            </span>
+                          </span>
+                        </Autocomplete.Item>
+                      )}
+                    </Autocomplete.List>
+                  </Autocomplete.Popup>
+                </Autocomplete.Positioner>
+              </Autocomplete.Portal>
+            </Autocomplete.Root>
             <Button
               type="submit"
               aria-label="Search"

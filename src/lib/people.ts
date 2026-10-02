@@ -14,6 +14,9 @@ export type Portrait = {
 
 export type EraPortrait = Portrait & { year: number };
 
+// What the search suggestions carry: enough to tell two namesakes apart.
+export type Suggestion = Pick<Person, "id" | "name" | "domain" | "birthYear" | "deathYear">;
+
 export type Person = {
   id: string;
   name: string;

@@ -4,7 +4,7 @@ export type SearchResult =
   | { ok: true; person: Person; year: number }
   | { ok: false; message: string };
 
-type ParsedQuery = {
+export type ParsedQuery = {
   name: string;
   year?: number;
   age?: number;
@@ -29,6 +29,21 @@ export function parseQuery(query: string): ParsedQuery {
   };
 }
 
+// The same query with another name: "dario 33" → "Dario Amodei at 33".
+export function queryWithName(query: string, name: string) {
+  const { year, age } = parseQuery(query);
+
+  if (year !== undefined) {
+    return `${name} ${year}`;
+  }
+
+  if (age !== undefined) {
+    return `${name} at ${age}`;
+  }
+
+  return name;
+}
+
 function normalize(text: string) {
   return text
     .normalize("NFD")
@@ -39,43 +54,75 @@ function normalize(text: string) {
     .trim();
 }
 
-// Best match wins: the whole name, then a whole word ("Picasso"), then the
-// start of a word ("Pic"), then anything inside; ties go to the better known.
-export function findPersonByName(people: Person[], name: string) {
+// Whether every word of the query starts a word of the name, in order
+// ("mich jor" → Michael Jordan).
+function wordsStart(words: string[], tokens: string[]) {
+  let from = 0;
+
+  for (const token of tokens) {
+    const index = words.findIndex((word, at) => at >= from && word.startsWith(token));
+
+    if (index === -1) {
+      return false;
+    }
+
+    from = index + 1;
+  }
+
+  return true;
+}
+
+// How well a name matches: the whole name, then a whole word ("Picasso"),
+// then the starts of words ("Pic", "mich jor"), then anything inside.
+function scoreName(candidate: string, query: string, tokens: string[]) {
+  const words = candidate.split(" ");
+
+  if (candidate === query) {
+    return 4;
+  }
+
+  if (words.includes(query) || candidate.startsWith(`${query} `)) {
+    return 3;
+  }
+
+  if (wordsStart(words, tokens)) {
+    return 2;
+  }
+
+  if (candidate.includes(query)) {
+    return 1;
+  }
+
+  return 0;
+}
+
+// The people whose names match best, the better known first among equals.
+export function rankPeopleByName(people: Person[], name: string, limit: number) {
   const query = normalize(name);
 
   if (!query) {
-    return undefined;
+    return [];
   }
 
-  let best: { person: Person; score: number } | undefined;
+  const tokens = query.split(" ");
+  const scored: { person: Person; score: number }[] = [];
 
   for (const person of people) {
-    const candidate = normalize(person.name);
-    const words = candidate.split(" ");
-    let score = 0;
+    const score = scoreName(normalize(person.name), query, tokens);
 
-    if (candidate === query) {
-      score = 4;
-    } else if (words.includes(query) || candidate.startsWith(`${query} `)) {
-      score = 3;
-    } else if (words.some((word) => word.startsWith(query))) {
-      score = 2;
-    } else if (candidate.includes(query)) {
-      score = 1;
-    }
-
-    if (
-      score > 0 &&
-      (!best ||
-        score > best.score ||
-        (score === best.score && person.views > best.person.views))
-    ) {
-      best = { person, score };
+    if (score > 0) {
+      scored.push({ person, score });
     }
   }
 
-  return best?.person;
+  return scored
+    .sort((a, b) => b.score - a.score || b.person.views - a.person.views)
+    .slice(0, limit)
+    .map((entry) => entry.person);
+}
+
+export function findPersonByName(people: Person[], name: string) {
+  return rankPeopleByName(people, name, 1)[0];
 }
 
 export function resolveSearch(
